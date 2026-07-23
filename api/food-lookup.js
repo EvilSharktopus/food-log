@@ -1,6 +1,15 @@
 // Vercel serverless function — POST /api/food-lookup
 // Returns: {"name":"...","kcal":number,"protein":number,"unknown":boolean}
 
+// Robustly extract the first JSON object from a model response,
+// regardless of surrounding markdown, explanatory text, or trailing notes.
+function extractJson(text) {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) throw new Error('No JSON object found in response');
+  return JSON.parse(text.substring(start, end + 1));
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST method required' });
 
@@ -58,7 +67,7 @@ Rules:
       if (claudeRes.ok) {
         const data = await claudeRes.json();
         const rawText = data?.content?.[0]?.text || '';
-        const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+        const parsed = extractJson(rawText);
         if (typeof parsed.kcal === 'number') return res.status(200).json(parsed);
         throw new Error('Claude returned invalid JSON structure');
       } else {
@@ -105,7 +114,7 @@ Rules:
           return res.status(502).json({ error: 'Gemini returned an empty response. Try rephrasing your food query.' });
         }
 
-        const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+        const parsed = extractJson(rawText);
         if (typeof parsed.kcal === 'number') return res.status(200).json(parsed);
         throw new Error('Gemini returned invalid JSON structure');
       } else {
