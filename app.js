@@ -164,14 +164,20 @@ function loadHistoricalLogs() {
 
 // Save current date document to Firestore
 async function saveCurrentDoc() {
+  const errBanner = document.getElementById('firestore-error-banner');
   try {
     await db.collection('food_logs').doc(selectedDate).set({
       ...currentDocData,
       date: selectedDate,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
+    if (errBanner) errBanner.style.display = 'none';
   } catch (e) {
-    console.error('Error saving to Firestore:', e);
+    console.error('Firestore write failed:', e);
+    if (errBanner) {
+      errBanner.textContent = '⚠️ Data not saved — Firestore rules not yet deployed. Run: firebase deploy --only firestore:rules';
+      errBanner.style.display = 'block';
+    }
   }
 }
 
@@ -199,6 +205,7 @@ function setupEventListeners() {
     const kcal = Number(document.getElementById('inline-act-kcal').value) || 0;
     currentDocData.activities.push({ id: Date.now().toString(), name, kcal });
     hideInlineActivityEdit();
+    renderAll();
     saveCurrentDoc();
   });
 
@@ -208,6 +215,7 @@ function setupEventListeners() {
   document.getElementById('save-garmin-btn').addEventListener('click', () => {
     const val = document.getElementById('garmin-override-input').value;
     currentDocData.garminBurnOverride = val !== "" ? Number(val) : null;
+    renderAll();
     saveCurrentDoc();
   });
 
@@ -236,6 +244,7 @@ function setupEventListeners() {
         protein: Number(btn.dataset.protein),
         tag: 'Whole food'
       });
+      renderAll();
       saveCurrentDoc();
     });
   });
@@ -251,6 +260,7 @@ function setupEventListeners() {
         protein: food.protein,
         tag: food.tag || 'Whole food'
       });
+      renderAll();
       saveCurrentDoc();
     }
     e.target.value = '';
@@ -279,6 +289,7 @@ function setupEventListeners() {
       protein: aiResultCache.protein,
       tag: selectedAiTag
     });
+    renderAll();
     saveCurrentDoc();
     hideAiResultBox();
   });
@@ -292,6 +303,7 @@ function setupEventListeners() {
       protein: aiResultCache.protein,
       tag: selectedAiTag
     });
+    renderAll();
     saveCurrentDoc();
     await db.collection('saved_foods').add({
       name: aiResultCache.name,
@@ -305,7 +317,10 @@ function setupEventListeners() {
 
   // Weigh-in
   ['weighin-weight', 'weighin-bf', 'weighin-muscle', 'weighin-bmr'].forEach(id => {
-    document.getElementById(id).addEventListener('change', saveWeighInFromUI);
+    document.getElementById(id).addEventListener('change', () => {
+      saveWeighInFromUI();
+      renderWeighInSection();
+    });
   });
 }
 
@@ -485,6 +500,7 @@ function renderActivitySection() {
 
 window.removeActivity = (id) => {
   currentDocData.activities = currentDocData.activities.filter(a => a.id !== id);
+  renderAll();
   saveCurrentDoc();
 };
 
@@ -516,6 +532,7 @@ function renderRehabSection() {
 window.toggleRehabTick = (ex) => {
   let ticks = currentDocData.rehabTicks || [];
   currentDocData.rehabTicks = ticks.includes(ex) ? ticks.filter(t => t !== ex) : [...ticks, ex];
+  renderRehabSection();
   saveCurrentDoc();
 };
 
@@ -549,6 +566,7 @@ function renderFoodSection() {
 
 window.removeFoodEntry = (id) => {
   currentDocData.foodEntries = currentDocData.foodEntries.filter(f => f.id !== id);
+  renderAll();
   saveCurrentDoc();
 };
 
