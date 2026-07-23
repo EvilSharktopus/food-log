@@ -89,13 +89,13 @@ Rules:
   if (geminiKey) {
     try {
       const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: systemInstruction + '\n\nFood query: ' + foodQuery }] }],
-            generationConfig: { maxOutputTokens: 800, temperature: 0.1 }
+            generationConfig: { maxOutputTokens: 200, temperature: 0.1 }
           })
         }
       );
@@ -103,14 +103,11 @@ Rules:
       if (geminiRes.ok) {
         const data = await geminiRes.json();
 
-        // Gemini 2.5 Flash is a thinking model — response has multiple parts.
-        // Find the non-thought part that contains the JSON answer.
-        const parts = data?.candidates?.[0]?.content?.parts || [];
-        const textPart = parts.find(p => !p.thought && typeof p.text === 'string' && p.text.trim().length > 0);
-        const rawText = textPart?.text || '';
+        // gemini-2.0-flash is not a thinking model — single text part in response
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
         if (!rawText) {
-          console.warn('Gemini returned no usable text part. Full response:', JSON.stringify(data).slice(0, 500));
+          console.warn('Gemini returned no text. Full response:', JSON.stringify(data).slice(0, 500));
           return res.status(502).json({ error: 'Gemini returned an empty response. Try rephrasing your food query.' });
         }
 
