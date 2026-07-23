@@ -86,14 +86,25 @@ Rules:
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: systemInstruction + '\n\nFood query: ' + foodQuery }] }],
-            generationConfig: { maxOutputTokens: 80, temperature: 0.1 }
+            generationConfig: { maxOutputTokens: 800, temperature: 0.1 }
           })
         }
       );
 
       if (geminiRes.ok) {
         const data = await geminiRes.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        // Gemini 2.5 Flash is a thinking model — response has multiple parts.
+        // Find the non-thought part that contains the JSON answer.
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        const textPart = parts.find(p => !p.thought && typeof p.text === 'string' && p.text.trim().length > 0);
+        const rawText = textPart?.text || '';
+
+        if (!rawText) {
+          console.warn('Gemini returned no usable text part. Full response:', JSON.stringify(data).slice(0, 500));
+          return res.status(502).json({ error: 'Gemini returned an empty response. Try rephrasing your food query.' });
+        }
+
         const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
         if (typeof parsed.kcal === 'number') return res.status(200).json(parsed);
         throw new Error('Gemini returned invalid JSON structure');
