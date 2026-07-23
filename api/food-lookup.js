@@ -1,6 +1,5 @@
 // Vercel serverless function — POST /api/food-lookup
 // Returns: {"name":"...","kcal":number,"protein":number,"unknown":boolean}
-// unknown=true means the model is guessing — UI should show editable fields
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST method required' });
@@ -17,6 +16,13 @@ module.exports = async function handler(req, res) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
   const geminiKey = process.env.GEMINI_KEY || process.env.VITE_GEMINI_KEY;
 
+  // Return clear error if no keys are configured at all
+  if (!anthropicKey && !geminiKey) {
+    return res.status(500).json({
+      error: 'No API key configured. Add ANTHROPIC_API_KEY or GEMINI_KEY in Vercel → Settings → Environment Variables, then redeploy.'
+    });
+  }
+
   const systemInstruction = `You are a nutrition database. Return ONLY a raw JSON object — no markdown, no explanation, no extra text.
 
 Schema:
@@ -28,8 +34,9 @@ Rules:
 - "kcal" and "protein" are always numbers (never null).
 - Keep "name" under 40 characters.`;
 
-  // Try Claude API first
+  // Try Claude first
   if (anthropicKey) {
+    let claudeStatus = null;
     try {
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -39,21 +46,33 @@ Rules:
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-3-5-haiku-20241022', // cheaper/faster than sonnet for this task
+          model: 'claude-3-5-haiku-20241022',
           max_tokens: 80,
           system: systemInstruction,
           messages: [{ role: 'user', content: foodQuery }]
         })
       });
 
+      claudeStatus = claudeRes.status;
+
       if (claudeRes.ok) {
         const data = await claudeRes.json();
         const rawText = data?.content?.[0]?.text || '';
         const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
         if (typeof parsed.kcal === 'number') return res.status(200).json(parsed);
+        throw new Error('Claude returned invalid JSON structure');
+      } else {
+        const errText = await claudeRes.text().catch(() => '');
+        console.warn(`Claude API returned ${claudeRes.status}:`, errText.slice(0, 200));
       }
     } catch (e) {
       console.warn('Claude lookup failed:', e.message);
+      // If only Claude key configured and it failed, return specific error
+      if (!geminiKey) {
+        return res.status(502).json({
+          error: `Claude API failed (HTTP ${claudeStatus || 'network error'}). Check your ANTHROPIC_API_KEY is valid and has credits.`
+        });
+      }
     }
   }
 
@@ -71,14 +90,25 @@ Rules:
           })
         }
       );
+
       if (geminiRes.ok) {
         const data = await geminiRes.json();
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
         const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
         if (typeof parsed.kcal === 'number') return res.status(200).json(parsed);
+        throw new Error('Gemini returned invalid JSON structure');
+      } else {
+        const errText = await geminiRes.text().catch(() => '');
+        console.warn(`Gemini API returned ${geminiRes.status}:`, errText.slice(0, 200));
+        return res.status(502).json({
+          error: `Gemini API failed (HTTP ${geminiRes.status}). Check your GEMINI_KEY is valid.`
+        });
       }
     } catch (e) {
       console.warn('Gemini lookup failed:', e.message);
+      return res.status(502).json({
+        error: `Gemini API error: ${e.message}`
+      });
     }
   }
 
