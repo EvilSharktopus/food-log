@@ -1,12 +1,11 @@
 // Vercel serverless function — POST /api/food-lookup
+// Uses Claude Haiku exclusively. Set ANTHROPIC_API_KEY in Vercel env vars.
 // Returns: {"name":"...","kcal":number,"protein":number,"unknown":boolean}
 
-// Robustly extract the first JSON object from a model response,
-// regardless of surrounding markdown, explanatory text, or trailing notes.
 function extractJson(text) {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
-  if (start === -1 || end === -1 || end < start) throw new Error('No JSON object found in response');
+  if (start === -1 || end === -1 || end < start) throw new Error('No JSON object found in model response');
   return JSON.parse(text.substring(start, end + 1));
 }
 
@@ -22,112 +21,54 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'Food query text is required.' });
   }
 
-  const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-  const geminiKey = process.env.GEMINI_KEY || process.env.VITE_GEMINI_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
 
-  // Return clear error if no keys are configured at all
-  if (!anthropicKey && !geminiKey) {
+  if (!apiKey) {
+    console.error('ANTHROPIC_API_KEY is not set in Vercel environment variables.');
     return res.status(500).json({
-      error: 'No API key configured. Add ANTHROPIC_API_KEY or GEMINI_KEY in Vercel → Settings → Environment Variables, then redeploy.'
+      error: 'ANTHROPIC_API_KEY not configured. Add it in Vercel → Settings → Environment Variables, then redeploy.'
     });
   }
 
-  const systemInstruction = `You are a nutrition database. Return ONLY a raw JSON object — no markdown, no explanation, no extra text.
+  const system = `You are a nutrition database. Return ONLY a raw JSON object — no markdown, no explanation, no extra text.
 
-Schema:
-{"name":"short item name","kcal":number,"protein":number,"unknown":false}
+Schema: {"name":"short item name under 40 chars","kcal":number,"protein":number,"unknown":false}
 
-Rules:
-- Set "unknown":true if you are genuinely unsure (home cooking, vague descriptions, made-up foods). Still provide your best numeric estimate.
-- Set "unknown":false for named packaged foods, restaurant items, or common whole foods where you have reasonable data.
-- "kcal" and "protein" are always numbers (never null).
-- Keep "name" under 40 characters.`;
+Set "unknown":true if genuinely unsure (home cooking, vague descriptions). Always provide a numeric estimate regardless.`;
 
-  // Try Claude first
-  if (anthropicKey) {
-    let claudeStatus = null;
-    try {
-      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': anthropicKey,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: 'claude-3-5-haiku-20241022',
-          max_tokens: 80,
-          system: systemInstruction,
-          messages: [{ role: 'user', content: foodQuery }]
-        })
-      });
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-haiku-20241022',
+        max_tokens: 80,
+        system,
+        messages: [{ role: 'user', content: foodQuery }]
+      })
+    });
 
-      claudeStatus = claudeRes.status;
-
-      if (claudeRes.ok) {
-        const data = await claudeRes.json();
-        const rawText = data?.content?.[0]?.text || '';
-        const parsed = extractJson(rawText);
-        if (typeof parsed.kcal === 'number') return res.status(200).json(parsed);
-        throw new Error('Claude returned invalid JSON structure');
-      } else {
-        const errBody = await claudeRes.json().catch(() => ({}));
-        const errMsg = errBody?.error?.message || errBody?.type || 'unknown';
-        console.warn(`Claude API failed (HTTP ${claudeRes.status}): ${errMsg} — falling back to Gemini`);
-      }
-    } catch (e) {
-      console.warn('Claude exception:', e.message, '— falling back to Gemini');
-      if (!geminiKey) {
-        return res.status(502).json({
-          error: `Claude API failed (HTTP ${claudeStatus || 'network error'}). Check your ANTHROPIC_API_KEY is valid and has credits.`
-        });
-      }
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => ({}));
+      const errMsg = errBody?.error?.message || errBody?.type || `HTTP ${response.status}`;
+      console.error('Claude API error:', errMsg);
+      return res.status(502).json({ error: `Claude API error: ${errMsg}` });
     }
+
+    const data = await response.json();
+    const rawText = data?.content?.[0]?.text || '';
+    const parsed = extractJson(rawText);
+
+    if (typeof parsed.kcal !== 'number') throw new Error('Response missing kcal field');
+
+    return res.status(200).json(parsed);
+
+  } catch (e) {
+    console.error('Food lookup failed:', e.message);
+    return res.status(502).json({ error: `Food lookup failed: ${e.message}` });
   }
-
-  // Fallback to Gemini
-  if (geminiKey) {
-    try {
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: systemInstruction + '\n\nFood query: ' + foodQuery }] }],
-            generationConfig: { maxOutputTokens: 200, temperature: 0.1 }
-          })
-        }
-      );
-
-      if (geminiRes.ok) {
-        const data = await geminiRes.json();
-
-        // gemini-2.0-flash is not a thinking model — single text part in response
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-        if (!rawText) {
-          console.warn('Gemini returned no text. Full response:', JSON.stringify(data).slice(0, 500));
-          return res.status(502).json({ error: 'Gemini returned an empty response. Try rephrasing your food query.' });
-        }
-
-        const parsed = extractJson(rawText);
-        if (typeof parsed.kcal === 'number') return res.status(200).json(parsed);
-        throw new Error('Gemini returned invalid JSON structure');
-      } else {
-        const errText = await geminiRes.text().catch(() => '');
-        console.warn(`Gemini API returned ${geminiRes.status}:`, errText.slice(0, 200));
-        return res.status(502).json({
-          error: `Gemini API failed (HTTP ${geminiRes.status}). Check your GEMINI_KEY is valid.`
-        });
-      }
-    } catch (e) {
-      console.warn('Gemini lookup failed:', e.message);
-      return res.status(502).json({
-        error: `Gemini API error: ${e.message}`
-      });
-    }
-  }
-
-  return res.status(502).json({ error: 'AI food lookup unavailable. Please enter food details manually or verify API keys.' });
 };
