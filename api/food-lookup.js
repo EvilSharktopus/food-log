@@ -62,12 +62,12 @@ Rules:
         if (typeof parsed.kcal === 'number') return res.status(200).json(parsed);
         throw new Error('Claude returned invalid JSON structure');
       } else {
-        const errText = await claudeRes.text().catch(() => '');
-        console.warn(`Claude API returned ${claudeRes.status}:`, errText.slice(0, 200));
+        const errBody = await claudeRes.json().catch(() => ({}));
+        const errMsg = errBody?.error?.message || errBody?.type || 'unknown';
+        console.warn(`Claude API failed (HTTP ${claudeRes.status}): ${errMsg} — falling back to Gemini`);
       }
     } catch (e) {
-      console.warn('Claude lookup failed:', e.message);
-      // If only Claude key configured and it failed, return specific error
+      console.warn('Claude exception:', e.message, '— falling back to Gemini');
       if (!geminiKey) {
         return res.status(502).json({
           error: `Claude API failed (HTTP ${claudeStatus || 'network error'}). Check your ANTHROPIC_API_KEY is valid and has credits.`
