@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Nutrition & Training Log</title>
+  <meta name="description" content="Single-user PWA for tracking daily food intake, workout burn, rehab compliance, and body composition.">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#faf8f5">
+  <link rel="stylesheet" href="/style.css">
+
+  <!-- Firebase Web SDK Compat Libraries -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+</head>
+<body>
+
+  <main class="app-container">
+
+    <!-- 1. Date Header -->
+    <header class="card date-header-card">
+      <button id="prev-day-btn" class="date-nav-btn" aria-label="Previous day">‹</button>
+      
+      <div class="date-picker-wrapper">
+        <input type="date" id="date-picker" class="date-input" aria-label="Select date">
+        <button id="today-badge-btn" class="today-btn" style="display: none;">Today</button>
+      </div>
+
+      <button id="next-day-btn" class="date-nav-btn" aria-label="Next day">›</button>
+    </header>
+
+    <!-- 2. Yesterday + Streak (Side by Side) -->
+    <section class="grid-2col" id="yesterday-streak-section">
+      <!-- Yesterday Card -->
+      <div class="stat-card-sm" id="yesterday-card" style="display: none;">
+        <div class="stat-card-title">Yesterday</div>
+        <div id="yesterday-stats" class="subtitle" style="font-weight: 700;">-- kcal</div>
+        <div id="yesterday-verdict" class="verdict-badge verdict-success">--</div>
+      </div>
+
+      <!-- Streak Card -->
+      <div class="stat-card-sm" id="streak-card">
+        <div class="stat-card-title">Nutrition Streak</div>
+        <div class="streak-display">
+          <span id="nutrition-streak-val" class="streak-number">0</span>
+          <span class="streak-unit">days</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Totals Panel -->
+    <section class="card" id="totals-section">
+      <div class="section-title">
+        <span>Today's Summary</span>
+      </div>
+
+      <div class="totals-grid">
+        <div class="total-metric">
+          <div id="total-kcal-in" class="total-value">0</div>
+          <div class="total-label">Calories In</div>
+        </div>
+
+        <div class="total-metric">
+          <div id="total-protein-in" class="total-value">0g</div>
+          <div class="total-label">Protein In</div>
+        </div>
+
+        <div class="total-metric">
+          <div id="total-burn" class="total-value">0</div>
+          <div class="total-label">Burn (kcal)</div>
+        </div>
+      </div>
+
+      <!-- Protein Progress -->
+      <div class="progress-wrapper">
+        <div class="progress-header">
+          <span>Protein Progress</span>
+          <span id="protein-target-caption" class="subtitle">180g to target</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div id="protein-progress-fill" class="progress-bar-fill"></div>
+        </div>
+      </div>
+
+      <!-- Left Today Card -->
+      <div id="left-today-card" class="left-today-card positive">
+        <div id="left-today-val" class="left-today-val">2300 kcal</div>
+        <div class="left-today-label">Left Today</div>
+      </div>
+
+      <!-- Explainer Line -->
+      <div id="totals-explainer" class="explainer-line">
+        Target: 2300 kcal (Rest Day) | Expenditure: 2230 kcal (2230 BMR + 0 burn) | Actual Deficit: 2230 kcal
+      </div>
+    </section>
+
+    <!-- 4. Evening Check Banner -->
+    <section id="evening-check-banner" class="evening-banner info" style="display: none;">
+      <span class="evening-icon">🌙</span>
+      <div id="evening-banner-text" class="evening-text"></div>
+    </section>
+
+    <!-- 5. Activity Section -->
+    <section class="card" id="activity-section">
+      <div class="section-title">
+        <span>Workout & Activity</span>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="quick-buttons-grid">
+        <button class="action-btn activity-btn" data-name="OTF" data-kcal="880">OTF (880)</button>
+        <button class="action-btn activity-btn" data-name="Basketball" data-kcal="650">B-ball (650)</button>
+        <button class="action-btn activity-btn" data-name="Run" data-kcal="550">Run (550)</button>
+        <button class="action-btn activity-btn" data-name="Other" data-kcal="300">Other (300)</button>
+      </div>
+
+      <!-- Inline Editable Box -->
+      <div id="activity-inline-edit" class="inline-edit-box" style="display: none;">
+        <span id="inline-act-name" style="font-weight: 700; flex: 1;">OTF</span>
+        <input type="number" id="inline-act-kcal" value="880" aria-label="Burn calories">
+        <button id="confirm-activity-btn" class="btn-primary-sm">Add</button>
+        <button id="cancel-activity-btn" class="btn-cancel-sm">Cancel</button>
+      </div>
+
+      <!-- Logged Activities List -->
+      <div id="activities-list" class="item-list"></div>
+
+      <!-- Garmin Burn Override -->
+      <div class="garmin-field-group">
+        <label for="garmin-override-input">Actual total burn (Garmin override):</label>
+        <div class="input-with-button">
+          <input type="number" id="garmin-override-input" placeholder="Enter Garmin burn">
+          <button id="save-garmin-btn" class="btn-primary-sm">Save</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. Rehab Section -->
+    <section class="card" id="rehab-section">
+      <div class="rehab-header">
+        <span class="section-title" style="margin-bottom:0;">Rehab Compliance</span>
+        <span id="rehab-streak-val" class="verdict-badge verdict-success">0d streak</span>
+      </div>
+
+      <div id="rehab-checklist" class="rehab-checklist" style="margin-top: 12px;"></div>
+
+      <div class="add-exercise-row">
+        <input type="text" id="new-exercise-input" placeholder="Add exercise to template">
+        <button id="add-exercise-btn" class="btn-primary-sm">Add</button>
+      </div>
+
+      <!-- 20:00 Nudge Message -->
+      <div id="rehab-nudge" class="rehab-nudge" style="display: none;">
+        ⚡ Nothing ticked today. Five minutes on the floor before bed.
+      </div>
+    </section>
+
+    <!-- 7. Food Section -->
+    <section class="card" id="food-section">
+      <div class="section-title">
+        <span>Food Intake</span>
+      </div>
+
+      <!-- Quick Add Buttons -->
+      <div class="preset-buttons">
+        <button class="preset-btn food-preset-btn" data-name="Breakfast (smoothie + 2 eggs)" data-kcal="440" data-protein="42">+ Breakfast (440k/42p)</button>
+        <button class="preset-btn food-preset-btn" data-name="Banana" data-kcal="105" data-protein="1">+ Banana (105k/1p)</button>
+        <button class="preset-btn food-preset-btn" data-name="Lunch bento" data-kcal="640" data-protein="70">+ Lunch Bento (640k/70p)</button>
+        <button class="preset-btn food-preset-btn" data-name="Home latte (16oz)" data-kcal="110" data-protein="17">+ Home Latte (110k/17p)</button>
+        <button class="preset-btn food-preset-btn" data-name="Cafe latte" data-kcal="190" data-protein="12">+ Cafe Latte (190k/12p)</button>
+      </div>
+
+      <!-- Saved Foods Dropdown -->
+      <select id="saved-foods-select" class="saved-foods-select" aria-label="Select saved food">
+        <option value="">-- Add from Saved Foods --</option>
+      </select>
+
+      <!-- AI Food Lookup -->
+      <div class="food-lookup-box">
+        <div class="lookup-input-row">
+          <input type="text" id="ai-lookup-input" placeholder="New food lookup (e.g. 2 slices pepperoni pizza)">
+          <button id="ai-lookup-btn" class="btn-primary-sm">Estimate</button>
+        </div>
+        
+        <div id="ai-error-box" class="rehab-nudge" style="display:none; background:#fee2e2; color:#b91c1c; border-color:#fecaca;"></div>
+
+        <div id="ai-result-box" class="ai-result-box" style="display: none;">
+          <div id="ai-result-title" class="ai-result-title">Item — 0 kcal, 0g protein</div>
+          
+          <div class="tag-selector">
+            <button class="tag-option selected" data-tag="Whole food">Whole food</button>
+            <button class="tag-option" data-tag="Protein">Protein</button>
+            <button class="tag-option" data-tag="Treat">Treat</button>
+          </div>
+
+          <div class="ai-actions">
+            <button id="ai-add-today-btn" class="btn-primary-sm">Add to today</button>
+            <button id="ai-add-save-btn" class="btn-cancel-sm" style="border: 1px solid var(--border-color);">Add &amp; Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Today's Logged Food List -->
+      <div id="food-entries-list" class="item-list"></div>
+
+      <!-- Snack Tag Reporting -->
+      <div class="snack-report-box">
+        <div class="snack-report-title">Trailing 30-Day Snack Tag Composition</div>
+        <div class="snack-tags-row">
+          <div>
+            <div id="count-whole" class="snack-count">0</div>
+            <div class="snack-label">Whole Food</div>
+          </div>
+          <div>
+            <div id="count-protein" class="snack-count">0</div>
+            <div class="snack-label">Protein</div>
+          </div>
+          <div>
+            <div id="count-treat" class="snack-count">0</div>
+            <div class="snack-label">Treat</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. Weigh-in Section -->
+    <section class="card" id="weighin-section">
+      <div class="section-title">
+        <span>Body Composition</span>
+      </div>
+
+      <div id="goal-weight-banner" class="goal-weight-banner" style="display: none;"></div>
+
+      <div class="weighin-grid">
+        <div class="weighin-field">
+          <label for="weighin-weight">Weight (lbs)</label>
+          <input type="number" step="0.1" id="weighin-weight" placeholder="185.0">
+        </div>
+        <div class="weighin-field">
+          <label for="weighin-bf">Body Fat %</label>
+          <input type="number" step="0.1" id="weighin-bf" placeholder="16.5">
+        </div>
+        <div class="weighin-field">
+          <label for="weighin-muscle">Muscle Mass (lbs)</label>
+          <input type="number" step="0.1" id="weighin-muscle" placeholder="145.0">
+        </div>
+        <div class="weighin-field">
+          <label for="weighin-bmr">BMR (kcal)</label>
+          <input type="number" id="weighin-bmr" placeholder="2230">
+        </div>
+      </div>
+
+      <div class="fasted-caption">Fasted morning readings only.</div>
+    </section>
+
+    <!-- 9. Trends Section -->
+    <section class="card" id="trends-section">
+      <div class="section-title">
+        <span>Analytics &amp; Trends</span>
+      </div>
+
+      <div class="trends-stats-grid">
+        <div class="trend-metric-card">
+          <div id="trend-avg-protein" class="trend-val">0g</div>
+          <div class="trend-label">7-day Avg Protein (Target: 180g)</div>
+        </div>
+
+        <div class="trend-metric-card">
+          <div id="trend-avg-kcal" class="trend-val">0 kcal</div>
+          <div class="trend-label">7-day Avg Calories</div>
+        </div>
+
+        <div class="trend-metric-card">
+          <div id="trend-deficit-days" class="trend-val">0 / 0</div>
+          <div class="trend-label">Days in Deficit</div>
+        </div>
+
+        <div class="trend-metric-card">
+          <div id="trend-weight" class="trend-val">--</div>
+          <div class="trend-label">Weight Trend &amp; Change</div>
+        </div>
+
+        <div class="trend-metric-card" style="grid-column: span 2;">
+          <div id="trend-rehab-count" class="trend-val">0 / 14 days</div>
+          <div class="trend-label">Rehab Compliance (Last 14 Days)</div>
+        </div>
+      </div>
+
+      <!-- 14-Day Bar Charts -->
+      <div class="chart-container">
+        <div class="chart-title">14-Day Protein Intake (g)</div>
+        <svg id="chart-protein-svg" class="svg-chart"></svg>
+      </div>
+
+      <div class="chart-container">
+        <div class="chart-title">14-Day Calorie Intake (kcal)</div>
+        <svg id="chart-kcal-svg" class="svg-chart"></svg>
+      </div>
+    </section>
+
+    <!-- 10. Badges Section -->
+    <section class="card" id="badges-section">
+      <div class="section-title">
+        <span>Achievement Badges</span>
+      </div>
+
+      <div class="badges-grid">
+        <div class="badge-card" id="badge-first">
+          <div class="badge-icon">🚀</div>
+          <div class="badge-name">First Log</div>
+        </div>
+
+        <div class="badge-card" id="badge-7d-log">
+          <div class="badge-icon">📅</div>
+          <div class="badge-name">7 Days Logged</div>
+        </div>
+
+        <div class="badge-card" id="badge-3d-streak">
+          <div class="badge-icon">🔥</div>
+          <div class="badge-name">3-Day Streak</div>
+        </div>
+
+        <div class="badge-card" id="badge-7d-streak">
+          <div class="badge-icon">⚡</div>
+          <div class="badge-name">7-Day Streak</div>
+        </div>
+
+        <div class="badge-card" id="badge-14d-streak">
+          <div class="badge-icon">🏆</div>
+          <div class="badge-name">14-Day Streak</div>
+        </div>
+
+        <div class="badge-card" id="badge-10p">
+          <div class="badge-icon">🥩</div>
+          <div class="badge-name">10 Protein Days</div>
+        </div>
+
+        <div class="badge-card" id="badge-3r">
+          <div class="badge-icon">🧘</div>
+          <div class="badge-name">3 Rehab Days</div>
+        </div>
+
+        <div class="badge-card" id="badge-7r">
+          <div class="badge-icon">💪</div>
+          <div class="badge-name">7 Rehab Days</div>
+        </div>
+
+        <div class="badge-card" id="badge-bf14">
+          <div class="badge-icon">🥇</div>
+          <div class="badge-name">14% BF Reached</div>
+        </div>
+      </div>
+
+      <button id="fcm-status-btn" class="fcm-btn">🔔 Enable Push Notifications</button>
+    </section>
+
+  </main>
+
+  <script src="/app.js"></script>
+
+  <!-- PWA Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('PWA ServiceWorker registered:', reg.scope))
+          .catch(err => console.log('ServiceWorker registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
