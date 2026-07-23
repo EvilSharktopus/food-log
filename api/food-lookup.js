@@ -1,5 +1,6 @@
 // Vercel serverless function — POST /api/food-lookup
-// Parses natural food queries into structured JSON: {"name": "short name", "kcal": number, "protein": number}
+// Returns: {"name":"...","kcal":number,"protein":number,"unknown":boolean}
+// unknown=true means the model is guessing — UI should show editable fields
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST method required' });
@@ -16,11 +17,18 @@ module.exports = async function handler(req, res) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
   const geminiKey = process.env.GEMINI_KEY || process.env.VITE_GEMINI_KEY;
 
-  const systemInstruction = `You are a nutrition database. The user provides a food item or query. 
-Return ONLY a valid, raw JSON object (no markdown, no backticks, no explanatory text) with this exact schema:
-{"name":"short concise item name","kcal":number,"protein":number}`;
+  const systemInstruction = `You are a nutrition database. Return ONLY a raw JSON object — no markdown, no explanation, no extra text.
 
-  // Try Claude API if key exists
+Schema:
+{"name":"short item name","kcal":number,"protein":number,"unknown":false}
+
+Rules:
+- Set "unknown":true if you are genuinely unsure (home cooking, vague descriptions, made-up foods). Still provide your best numeric estimate.
+- Set "unknown":false for named packaged foods, restaurant items, or common whole foods where you have reasonable data.
+- "kcal" and "protein" are always numbers (never null).
+- Keep "name" under 40 characters.`;
+
+  // Try Claude API first
   if (anthropicKey) {
     try {
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -31,8 +39,8 @@ Return ONLY a valid, raw JSON object (no markdown, no backticks, no explanatory 
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 250,
+          model: 'claude-3-5-haiku-20241022', // cheaper/faster than sonnet for this task
+          max_tokens: 80,
           system: systemInstruction,
           messages: [{ role: 'user', content: foodQuery }]
         })
@@ -41,16 +49,15 @@ Return ONLY a valid, raw JSON object (no markdown, no backticks, no explanatory 
       if (claudeRes.ok) {
         const data = await claudeRes.json();
         const rawText = data?.content?.[0]?.text || '';
-        const cleanJsonStr = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanJsonStr);
-        return res.status(200).json(parsed);
+        const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+        if (typeof parsed.kcal === 'number') return res.status(200).json(parsed);
       }
     } catch (e) {
-      console.warn('Claude API failed, falling back if possible:', e.message);
+      console.warn('Claude lookup failed:', e.message);
     }
   }
 
-  // Fallback to Gemini API if key exists
+  // Fallback to Gemini
   if (geminiKey) {
     try {
       const geminiRes = await fetch(
@@ -59,19 +66,19 @@ Return ONLY a valid, raw JSON object (no markdown, no backticks, no explanatory 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: systemInstruction + '\nUser query: ' + foodQuery }] }]
+            contents: [{ parts: [{ text: systemInstruction + '\n\nFood query: ' + foodQuery }] }],
+            generationConfig: { maxOutputTokens: 80, temperature: 0.1 }
           })
         }
       );
       if (geminiRes.ok) {
         const data = await geminiRes.json();
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const cleanJsonStr = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanJsonStr);
-        return res.status(200).json(parsed);
+        const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+        if (typeof parsed.kcal === 'number') return res.status(200).json(parsed);
       }
     } catch (e) {
-      console.warn('Gemini API fallback failed:', e.message);
+      console.warn('Gemini lookup failed:', e.message);
     }
   }
 

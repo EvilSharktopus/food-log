@@ -189,17 +189,40 @@
         <div id="ai-error-box" class="rehab-nudge" style="display:none; background:#fee2e2; color:#b91c1c; border-color:#fecaca;"></div>
 
         <div id="ai-result-box" class="ai-result-box" style="display: none;">
-          <div id="ai-result-title" class="ai-result-title">Item — 0 kcal, 0g protein</div>
-          
+          <!-- Uncertainty warning — shown when model is guessing -->
+          <div id="ai-unknown-warning" style="display:none; background:#fffbeb; border:1px solid #fef3c7; color:#92400e; padding:8px 12px; border-radius:6px; font-size:0.8rem; font-weight:600; margin-bottom:10px;">
+            ⚠️ Best guess — couldn't find exact data. Adjust the values below before adding.
+          </div>
+
+          <!-- Confirmed result display (shown when confident) -->
+          <div id="ai-result-display">
+            <div id="ai-result-title" class="ai-result-title"></div>
+          </div>
+
+          <!-- Editable fields (always shown when unknown=true, toggle when confident) -->
+          <div id="ai-manual-fields" style="display:none; margin-bottom:10px;">
+            <div style="display:grid; grid-template-columns:1fr 80px 80px; gap:6px; align-items:center;">
+              <input type="text" id="ai-edit-name" placeholder="Food name" style="padding:6px 10px; border:1px solid var(--border-color); border-radius:6px; font-size:0.85rem;">
+              <input type="number" id="ai-edit-kcal" placeholder="kcal" style="padding:6px 8px; border:1px solid var(--border-color); border-radius:6px; font-size:0.85rem; text-align:center;">
+              <input type="number" id="ai-edit-protein" placeholder="g protein" style="padding:6px 8px; border:1px solid var(--border-color); border-radius:6px; font-size:0.85rem; text-align:center;">
+            </div>
+            <div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;">Name · kcal · protein (g)</div>
+          </div>
+
+          <!-- Toggle edit link for confident results -->
+          <div id="ai-edit-toggle-row" style="display:none; margin-bottom:8px;">
+            <button id="ai-toggle-edit-btn" style="background:none; border:none; font-size:0.78rem; color:var(--blue-accent); cursor:pointer; padding:0; font-weight:600;">✏️ Edit values</button>
+          </div>
+
           <div class="tag-selector">
             <button class="tag-option selected" data-tag="Whole food">Whole food</button>
             <button class="tag-option" data-tag="Protein">Protein</button>
             <button class="tag-option" data-tag="Treat">Treat</button>
           </div>
 
-          <div class="ai-actions">
+          <div class="ai-actions" style="gap:6px; flex-wrap:wrap;">
             <button id="ai-add-today-btn" class="btn-primary-sm">Add to today</button>
-            <button id="ai-add-save-btn" class="btn-cancel-sm" style="border: 1px solid var(--border-color);">Add &amp; Save</button>
+            <button id="ai-add-save-btn" style="background:#f0fdf4; color:var(--green-text); border:1px solid var(--green-border); padding:8px 12px; border-radius:6px; font-weight:700; font-size:0.85rem; cursor:pointer;">Save to library ✚</button>
           </div>
         </div>
       </div>

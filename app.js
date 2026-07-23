@@ -282,12 +282,13 @@ function setupEventListeners() {
   });
 
   document.getElementById('ai-add-today-btn').addEventListener('click', () => {
-    if (!aiResultCache) return;
+    const vals = getAiResultValues();
+    if (!vals) return;
     currentDocData.foodEntries.push({
       id: Date.now().toString(),
-      name: aiResultCache.name,
-      kcal: aiResultCache.kcal,
-      protein: aiResultCache.protein,
+      name: vals.name,
+      kcal: vals.kcal,
+      protein: vals.protein,
       tag: selectedAiTag
     });
     renderAll();
@@ -296,20 +297,28 @@ function setupEventListeners() {
   });
 
   document.getElementById('ai-add-save-btn').addEventListener('click', async () => {
-    if (!aiResultCache) return;
+    const vals = getAiResultValues();
+    if (!vals) return;
+
+    const confirmed = window.confirm(`Save "${vals.name}" to your food library?\nIt will appear in the saved foods dropdown on future days.`);
+    if (!confirmed) return;
+
+    // Add to today
     currentDocData.foodEntries.push({
       id: Date.now().toString(),
-      name: aiResultCache.name,
-      kcal: aiResultCache.kcal,
-      protein: aiResultCache.protein,
+      name: vals.name,
+      kcal: vals.kcal,
+      protein: vals.protein,
       tag: selectedAiTag
     });
     renderAll();
     saveCurrentDoc();
+
+    // Save to library
     await db.collection('saved_foods').add({
-      name: aiResultCache.name,
-      kcal: aiResultCache.kcal,
-      protein: aiResultCache.protein,
+      name: vals.name,
+      kcal: vals.kcal,
+      protein: vals.protein,
       tag: selectedAiTag,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -362,8 +371,7 @@ async function handleAiLookup() {
     if (!data.name || typeof data.kcal !== 'number') throw new Error('Invalid response from lookup.');
 
     aiResultCache = data;
-    document.getElementById('ai-result-title').textContent = `${data.name} — ${data.kcal} kcal, ${data.protein}g protein`;
-    document.getElementById('ai-result-box').style.display = 'block';
+    showAiResult(data);
     input.value = '';
   } catch (err) {
     errBox.textContent = err.message || 'Lookup failed. Enter food manually.';
@@ -373,8 +381,66 @@ async function handleAiLookup() {
   }
 }
 
+function showAiResult(data) {
+  const isUnknown = !!data.unknown;
+
+  // Title line
+  document.getElementById('ai-result-title').textContent = `${data.name} — ${data.kcal} kcal, ${data.protein}g protein`;
+  document.getElementById('ai-result-display').style.display = isUnknown ? 'none' : 'block';
+
+  // Unknown warning + manual fields
+  document.getElementById('ai-unknown-warning').style.display = isUnknown ? 'block' : 'none';
+  document.getElementById('ai-manual-fields').style.display = isUnknown ? 'block' : 'none';
+  if (isUnknown) {
+    document.getElementById('ai-edit-name').value = data.name;
+    document.getElementById('ai-edit-kcal').value = data.kcal;
+    document.getElementById('ai-edit-protein').value = data.protein;
+  }
+
+  // "Edit values" toggle for confident results
+  document.getElementById('ai-edit-toggle-row').style.display = isUnknown ? 'none' : 'block';
+
+  document.getElementById('ai-result-box').style.display = 'block';
+}
+
+// Wire the "Edit values" toggle
+document.addEventListener('DOMContentLoaded', () => {
+  const toggleBtn = document.getElementById('ai-toggle-edit-btn');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const fields = document.getElementById('ai-manual-fields');
+      const isVisible = fields.style.display !== 'none';
+      fields.style.display = isVisible ? 'none' : 'block';
+      if (!isVisible && aiResultCache) {
+        document.getElementById('ai-edit-name').value = aiResultCache.name;
+        document.getElementById('ai-edit-kcal').value = aiResultCache.kcal;
+        document.getElementById('ai-edit-protein').value = aiResultCache.protein;
+      }
+      toggleBtn.textContent = isVisible ? '✏️ Edit values' : '✏️ Hide edits';
+    });
+  }
+});
+
+// Read current values from result box (editable fields take priority if visible)
+function getAiResultValues() {
+  const manualVisible = document.getElementById('ai-manual-fields').style.display !== 'none';
+  if (manualVisible) {
+    const name = document.getElementById('ai-edit-name').value.trim();
+    const kcal = Number(document.getElementById('ai-edit-kcal').value);
+    const protein = Number(document.getElementById('ai-edit-protein').value);
+    if (!name || isNaN(kcal)) return null;
+    return { name, kcal, protein: isNaN(protein) ? 0 : protein };
+  }
+  return aiResultCache ? { name: aiResultCache.name, kcal: aiResultCache.kcal, protein: aiResultCache.protein } : null;
+}
+
 function hideAiResultBox() {
   document.getElementById('ai-result-box').style.display = 'none';
+  document.getElementById('ai-manual-fields').style.display = 'none';
+  document.getElementById('ai-unknown-warning').style.display = 'none';
+  document.getElementById('ai-edit-toggle-row').style.display = 'none';
+  document.getElementById('ai-result-display').style.display = 'block';
+  document.getElementById('ai-toggle-edit-btn').textContent = '✏️ Edit values';
   aiResultCache = null;
 }
 
