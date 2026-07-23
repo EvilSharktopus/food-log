@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Daily nutrition & training logs — single-user, open read/write
+    match /food_logs/{date} {
+      allow read, write: if true;
+    }
+
+    // Persistent rehab exercise list and other app settings
+    match /food_settings/{id} {
+      allow read, write: if true;
+    }
+
+    // Saved foods library
+    match /saved_foods/{id} {
+      allow read, write: if true;
+    }
+
+    // FCM push notification tokens
+    match /fcm_tokens/{id} {
+      allow read, write: if true;
+    }
+  }
+}
