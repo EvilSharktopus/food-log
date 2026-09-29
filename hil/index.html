@@ -6,10 +6,11 @@
   <title>Hil's Food Log</title>
   <meta name="description" content="Simple tap-to-log food diary grouped by meal, with summary charts.">
   <link rel="manifest" href="/hil/manifest.json">
-  <meta name="theme-color" content="#fdf6ec">
+  <meta name="theme-color" id="theme-color-meta" content="#fdf6ec">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
+  <script>try{var t=localStorage.getItem('hil-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
   <link rel="stylesheet" href="/hil/hil.css">
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -40,22 +41,18 @@
 
       <div class="meal-grid">
         <button class="meal-tile meal-breakfast" data-meal="breakfast">
-          <span class="meal-emoji">🍳</span>
           <span class="meal-name">Breakfast</span>
           <span class="meal-count" data-count="breakfast"></span>
         </button>
         <button class="meal-tile meal-lunch" data-meal="lunch">
-          <span class="meal-emoji">🥪</span>
           <span class="meal-name">Lunch</span>
           <span class="meal-count" data-count="lunch"></span>
         </button>
         <button class="meal-tile meal-dinner" data-meal="dinner">
-          <span class="meal-emoji">🍽️</span>
           <span class="meal-name">Dinner</span>
           <span class="meal-count" data-count="dinner"></span>
         </button>
         <button class="meal-tile meal-snack" data-meal="snack">
-          <span class="meal-emoji">🍎</span>
           <span class="meal-name">Snack</span>
           <span class="meal-count" data-count="snack"></span>
         </button>
@@ -63,7 +60,12 @@
 
       <div id="day-log" class="day-log"></div>
 
-      <button id="open-summary" class="summary-link">📊 See my summary</button>
+      <button id="open-summary" class="summary-link">See my summary</button>
+
+      <div class="theme-card">
+        <div class="theme-title">Theme</div>
+        <div id="theme-row" class="theme-row" role="radiogroup" aria-label="Colour theme"></div>
+      </div>
     </section>
 
     <!-- ===== PICK FOOD VIEW ===== -->
@@ -71,7 +73,6 @@
       <header class="pick-header">
         <button id="pick-back" class="back-btn" aria-label="Back">‹ Back</button>
         <div class="pick-title">
-          <span id="pick-meal-emoji" class="pick-meal-emoji"></span>
           <span id="pick-meal-name" class="pick-meal-name"></span>
           <span id="pick-date" class="pick-date"></span>
         </div>
@@ -86,7 +87,7 @@
       </div>
 
       <div class="food-group">
-        <div class="food-group-title">⭐ Favourites</div>
+        <div class="food-group-title">Favourites</div>
         <div id="fav-list" class="chip-list"></div>
       </div>
 

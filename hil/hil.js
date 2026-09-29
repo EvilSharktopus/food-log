@@ -18,11 +18,22 @@ const FOODS = 'hil_foods';
 const SETTINGS = 'hil_settings';
 
 const MEALS = {
-  breakfast: { label: 'Breakfast', emoji: '🍳', color: 'var(--s-breakfast)' },
-  lunch:     { label: 'Lunch',     emoji: '🥪', color: 'var(--s-lunch)' },
-  dinner:    { label: 'Dinner',    emoji: '🍽️', color: 'var(--s-dinner)' },
-  snack:     { label: 'Snack',     emoji: '🍎', color: 'var(--s-snack)' }
+  breakfast: { label: 'Breakfast', color: 'var(--s-breakfast)' },
+  lunch:     { label: 'Lunch',     color: 'var(--s-lunch)' },
+  dinner:    { label: 'Dinner',    color: 'var(--s-dinner)' },
+  snack:     { label: 'Snack',     color: 'var(--s-snack)' }
 };
+
+// Colour themes. Values live in hil.css under [data-theme="..."]; this list
+// drives the picker and the browser chrome colour.
+const THEMES = [
+  { id: 'warm',   label: 'Warm',   swatch: '#f97316', chrome: '#fdf6ec' },
+  { id: 'clean',  label: 'Clean',  swatch: '#2563eb', chrome: '#f8fafc' },
+  { id: 'sage',   label: 'Sage',   swatch: '#4d7c0f', chrome: '#f3f6ee' },
+  { id: 'rose',   label: 'Rose',   swatch: '#db2777', chrome: '#fdf2f6' },
+  { id: 'ocean',  label: 'Ocean',  swatch: '#0e7490', chrome: '#eef6f8' },
+  { id: 'dark',   label: 'Dark',   swatch: '#f59e0b', chrome: '#15130f' }
+];
 const MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 // Starter favourites, seeded once into hil_foods so they can be edited later.
@@ -99,9 +110,50 @@ function clearError() { $('error-banner').style.display = 'none'; }
 // ---------- init ----------
 document.addEventListener('DOMContentLoaded', () => {
   wireEvents();
+  initTheme();
   subscribeFoods();
   setDate(selectedDate);
 });
+
+// ---------- theme ----------
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme') || 'warm';
+}
+
+function applyTheme(id, { persist = true } = {}) {
+  const theme = THEMES.find(t => t.id === id) || THEMES[0];
+  document.documentElement.setAttribute('data-theme', theme.id);
+  const meta = $('theme-color-meta');
+  if (meta) meta.setAttribute('content', theme.chrome);
+  document.querySelectorAll('.theme-swatch').forEach(b => {
+    b.classList.toggle('active', b.dataset.theme === theme.id);
+    b.setAttribute('aria-checked', b.dataset.theme === theme.id ? 'true' : 'false');
+  });
+  if (!persist) return;
+  try { localStorage.setItem('hil-theme', theme.id); } catch (_) {}
+  db.collection(SETTINGS).doc('prefs').set({ theme: theme.id }, { merge: true }).catch(() => {});
+}
+
+function initTheme() {
+  const row = $('theme-row');
+  THEMES.forEach(t => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'theme-swatch';
+    b.dataset.theme = t.id;
+    b.setAttribute('role', 'radio');
+    b.innerHTML = `<span class="theme-dot" style="background:${t.swatch}; border-color:${t.chrome}"></span><span class="theme-name">${t.label}</span>`;
+    b.addEventListener('click', () => applyTheme(t.id));
+    row.appendChild(b);
+  });
+  applyTheme(currentTheme(), { persist: false });
+  // Follow the theme saved in Firestore so it matches across devices.
+  db.collection(SETTINGS).doc('prefs').onSnapshot((doc) => {
+    const saved = doc.exists && doc.data().theme;
+    if (saved && saved !== currentTheme()) applyTheme(saved, { persist: false });
+    if (saved) { try { localStorage.setItem('hil-theme', saved); } catch (_) {} }
+  }, () => {});
+}
 
 function wireEvents() {
   $('prev-day').addEventListener('click', () => setDate(offsetDate(selectedDate, -1)));
@@ -188,7 +240,7 @@ function renderDay() {
     card.className = 'log-meal';
     card.innerHTML = `
       <div class="log-meal-head">
-        <span>${MEALS[m].emoji} ${MEALS[m].label}</span>
+        <span>${MEALS[m].label}</span>
         <button class="log-meal-add" data-meal="${m}">＋ add more</button>
       </div>`;
     card.querySelector('.log-meal-add').addEventListener('click', () => openPicker(m));
@@ -283,7 +335,6 @@ async function toggleFavourite(food) {
 function openPicker(meal) {
   pickMeal = meal;
   pickSelected = new Set();
-  $('pick-meal-emoji').textContent = MEALS[meal].emoji;
   $('pick-meal-name').textContent = MEALS[meal].label;
   $('pick-date').textContent = weekdayLabel(selectedDate) + ' · ' + prettyDate(selectedDate);
   $('food-search').value = '';
@@ -426,7 +477,7 @@ function renderSummary() {
     const tile = document.createElement('div');
     tile.className = 'meal-day-tile';
     tile.innerHTML = `<div class="meal-day-val" style="color:${MEALS[m].color}">${pct}%</div>
-      <div class="meal-day-label">${MEALS[m].emoji} ${MEALS[m].label}</div>
+      <div class="meal-day-label">${MEALS[m].label}</div>
       <div class="meal-day-sub">${daysWith} of ${dates.length} days</div>`;
     md.appendChild(tile);
   });
