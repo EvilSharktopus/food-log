@@ -2,8 +2,9 @@
   "short_name": "Hil's Log",
   "name": "Hil's Food Log",
   "icons": [
-    { "src": "/assets/icon-192.png", "type": "image/png", "sizes": "192x192" },
-    { "src": "/assets/icon-512.png", "type": "image/png", "sizes": "512x512" }
+    { "src": "/hil/assets/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/hil/assets/icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "/hil/assets/icon-512-maskable.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
   ],
   "start_url": "/hil",
   "scope": "/hil",
