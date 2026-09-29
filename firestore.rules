@@ -21,5 +21,16 @@ service cloud.firestore {
     match /fcm_tokens/{id} {
       allow read, write: if true;
     }
+
+    // Hil's food log (/hil) — separate collections, same open access
+    match /hil_logs/{date} {
+      allow read, write: if true;
+    }
+    match /hil_foods/{id} {
+      allow read, write: if true;
+    }
+    match /hil_settings/{id} {
+      allow read, write: if true;
+    }
   }
 }

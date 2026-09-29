@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Hil's Food Log</title>
+  <meta name="description" content="Simple tap-to-log food diary grouped by meal, with summary charts.">
+  <link rel="manifest" href="/hil/manifest.json">
+  <meta name="theme-color" content="#fdf6ec">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="/assets/icon-192.png">
+  <link rel="stylesheet" href="/hil/hil.css">
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+  <div id="error-banner" class="error-banner" style="display:none;"></div>
+
+  <main class="hil-app">
+
+    <!-- ===== DAY VIEW ===== -->
+    <section id="view-day" class="view">
+
+      <header class="date-bar">
+        <button id="prev-day" class="date-arrow" aria-label="Previous day">‹</button>
+        <button id="date-label" class="date-label" aria-label="Pick a date">
+          <span id="date-weekday" class="date-weekday">Today</span>
+          <span id="date-full" class="date-full">—</span>
+        </button>
+        <button id="next-day" class="date-arrow" aria-label="Next day">›</button>
+        <input type="date" id="date-input" class="date-hidden-input" aria-hidden="true" tabindex="-1">
+      </header>
+
+      <button id="jump-today" class="jump-today" style="display:none;">Back to today</button>
+
+      <p class="prompt">What did you eat?</p>
+
+      <div class="meal-grid">
+        <button class="meal-tile meal-breakfast" data-meal="breakfast">
+          <span class="meal-emoji">🍳</span>
+          <span class="meal-name">Breakfast</span>
+          <span class="meal-count" data-count="breakfast"></span>
+        </button>
+        <button class="meal-tile meal-lunch" data-meal="lunch">
+          <span class="meal-emoji">🥪</span>
+          <span class="meal-name">Lunch</span>
+          <span class="meal-count" data-count="lunch"></span>
+        </button>
+        <button class="meal-tile meal-dinner" data-meal="dinner">
+          <span class="meal-emoji">🍽️</span>
+          <span class="meal-name">Dinner</span>
+          <span class="meal-count" data-count="dinner"></span>
+        </button>
+        <button class="meal-tile meal-snack" data-meal="snack">
+          <span class="meal-emoji">🍎</span>
+          <span class="meal-name">Snack</span>
+          <span class="meal-count" data-count="snack"></span>
+        </button>
+      </div>
+
+      <div id="day-log" class="day-log"></div>
+
+      <button id="open-summary" class="summary-link">📊 See my summary</button>
+    </section>
+
+    <!-- ===== PICK FOOD VIEW ===== -->
+    <section id="view-pick" class="view" style="display:none;">
+      <header class="pick-header">
+        <button id="pick-back" class="back-btn" aria-label="Back">‹ Back</button>
+        <div class="pick-title">
+          <span id="pick-meal-emoji" class="pick-meal-emoji"></span>
+          <span id="pick-meal-name" class="pick-meal-name"></span>
+          <span id="pick-date" class="pick-date"></span>
+        </div>
+      </header>
+
+      <div class="search-row">
+        <input type="search" id="food-search" placeholder="Search or type a new food…" autocomplete="off" autocapitalize="sentences">
+      </div>
+
+      <div id="add-new-row" class="add-new-row" style="display:none;">
+        <button id="add-new-btn" class="add-new-btn">＋ Add “<span id="add-new-name"></span>” to my foods</button>
+      </div>
+
+      <div class="food-group">
+        <div class="food-group-title">⭐ Favourites</div>
+        <div id="fav-list" class="chip-list"></div>
+      </div>
+
+      <div class="food-group">
+        <div class="food-group-title">All my foods</div>
+        <div id="all-list" class="chip-list"></div>
+        <div id="all-empty" class="empty-note" style="display:none;">Nothing here yet. Type a food above to add it.</div>
+      </div>
+
+      <div id="pick-footer" class="pick-footer">
+        <div id="pick-selected" class="pick-selected">Tap foods to pick them</div>
+        <button id="log-selected" class="log-btn" disabled>Log</button>
+      </div>
+    </section>
+
+    <!-- ===== SUMMARY VIEW ===== -->
+    <section id="view-summary" class="view" style="display:none;">
+      <header class="pick-header">
+        <button id="summary-back" class="back-btn" aria-label="Back">‹ Back</button>
+        <div class="pick-title"><span class="pick-meal-name">My summary</span></div>
+      </header>
+
+      <div class="range-row" role="tablist">
+        <button class="range-btn active" data-range="7">7 days</button>
+        <button class="range-btn" data-range="30">30 days</button>
+        <button class="range-btn" data-range="90">90 days</button>
+        <button class="range-btn" data-range="all">All time</button>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-tile"><div id="stat-days" class="stat-val">0</div><div class="stat-label">days logged</div></div>
+        <div class="stat-tile"><div id="stat-items" class="stat-val">0</div><div class="stat-label">foods logged</div></div>
+        <div class="stat-tile"><div id="stat-avg" class="stat-val">0</div><div class="stat-label">foods per day</div></div>
+        <div class="stat-tile"><div id="stat-streak" class="stat-val">0</div><div class="stat-label">day streak</div></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Foods by meal</div>
+        <div class="donut-wrap">
+          <svg id="donut" class="donut" viewBox="0 0 200 200" role="img" aria-label="Foods by meal"></svg>
+          <div id="donut-legend" class="legend"></div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Most logged foods</div>
+        <div id="top-foods" class="bars"></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Foods logged per day</div>
+        <svg id="daily-chart" class="daily-chart" role="img" aria-label="Foods logged per day"></svg>
+        <div id="daily-tooltip" class="tooltip" style="display:none;"></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Meals per day</div>
+        <div id="meal-days" class="meal-days"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast" style="display:none;"></div>
+
+  <script src="/hil/hil.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "short_name": "Hil's Log",
+  "name": "Hil's Food Log",
+  "icons": [
+    { "src": "/assets/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/assets/icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ],
+  "start_url": "/hil",
+  "scope": "/hil",
+  "background_color": "#fdf6ec",
+  "theme_color": "#f97316",
+  "display": "standalone",
+  "orientation": "portrait"
+}
