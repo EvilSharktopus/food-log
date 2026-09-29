@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/hil/assets/icon-192.png">
   <link rel="icon" href="/hil/assets/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" sizes="180x180" href="/hil/assets/apple-touch-icon.png">
-  <script>try{var t=localStorage.getItem('hil-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+  <script>try{if(localStorage.getItem('hil-theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}</script>
   <link rel="stylesheet" href="/hil/hil.css">
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -42,6 +42,9 @@
 
       <p class="prompt">What did you eat?</p>
 
+      <button id="regular-day" class="regular-day">Regular day</button>
+      <div class="regular-day-note">Logs Regular breakfast + Regular lunch</div>
+
       <div class="meal-grid">
         <button class="meal-tile meal-breakfast" data-meal="breakfast">
           <span class="meal-name">Breakfast</span>
@@ -66,8 +69,7 @@
       <button id="open-summary" class="summary-link">See my summary</button>
 
       <div class="theme-line">
-        <label for="theme-select" class="theme-select-label">Theme</label>
-        <select id="theme-select" class="theme-select" aria-label="Colour theme"></select>
+        <button id="theme-toggle" class="theme-toggle" aria-pressed="false">Dark mode</button>
       </div>
     </section>
 

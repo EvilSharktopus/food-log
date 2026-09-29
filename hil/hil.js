@@ -24,16 +24,6 @@ const MEALS = {
   snack:     { label: 'Snack',     color: 'var(--s-snack)' }
 };
 
-// Colour themes. Values live in hil.css under [data-theme="..."]; this list
-// drives the picker and the browser chrome colour.
-const THEMES = [
-  { id: 'warm',   label: 'Warm',   swatch: '#f97316', chrome: '#fdf6ec' },
-  { id: 'clean',  label: 'Clean',  swatch: '#2563eb', chrome: '#f8fafc' },
-  { id: 'sage',   label: 'Sage',   swatch: '#4d7c0f', chrome: '#f3f6ee' },
-  { id: 'rose',   label: 'Rose',   swatch: '#db2777', chrome: '#fdf2f6' },
-  { id: 'ocean',  label: 'Ocean',  swatch: '#0e7490', chrome: '#eef6f8' },
-  { id: 'dark',   label: 'Dark',   swatch: '#f59e0b', chrome: '#15130f' }
-];
 const MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 // Food tags. Stored on the food (asked once, first time it's logged), never
@@ -45,8 +35,16 @@ const TAGS = {
 };
 const TAG_ORDER = ['safe', 'borderline', 'indulgent'];
 
-// Starter favourites, seeded once into hil_foods so they can be edited later.
-const STARTER_FAVOURITES = [
+// Foods that every install should have. The "Regular day" button logs
+// the first two. Seed version bumps trigger a one-time library migration.
+const SEED_VERSION = 2;
+const REGULAR_FOODS = [
+  { name: 'Regular breakfast', meal: 'breakfast', tag: 'safe' },
+  { name: 'Regular lunch',     meal: 'lunch',     tag: 'safe' }
+];
+
+// The old v1 starter list; removed by the v2 migration.
+const OLD_STARTER_FAVOURITES = [
   'Toast', 'Eggs', 'Oatmeal', 'Cereal', 'Yogurt', 'Banana', 'Apple',
   'Sandwich', 'Salad', 'Soup', 'Pasta', 'Rice', 'Chicken', 'Pizza',
   'Cheese & crackers', 'Cookies', 'Chips', 'Chocolate', 'Coffee', 'Tea', 'Smoothie'
@@ -124,35 +122,32 @@ document.addEventListener('DOMContentLoaded', () => {
   setDate(selectedDate);
 });
 
-// ---------- theme ----------
+// ---------- theme (light / dark) ----------
 function currentTheme() {
-  return document.documentElement.getAttribute('data-theme') || 'warm';
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 }
 
 function applyTheme(id, { persist = true } = {}) {
-  const theme = THEMES.find(t => t.id === id) || THEMES[0];
-  document.documentElement.setAttribute('data-theme', theme.id);
+  const theme = id === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', theme);
   const meta = $('theme-color-meta');
-  if (meta) meta.setAttribute('content', theme.chrome);
-  const sel = $('theme-select');
-  if (sel && sel.value !== theme.id) sel.value = theme.id;
+  if (meta) meta.setAttribute('content', theme === 'dark' ? '#15130f' : '#fdf6ec');
+  const btn = $('theme-toggle');
+  if (btn) {
+    btn.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+    btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+  }
   if (!persist) return;
-  try { localStorage.setItem('hil-theme', theme.id); } catch (_) {}
-  db.collection(SETTINGS).doc('prefs').set({ theme: theme.id }, { merge: true }).catch(() => {});
+  try { localStorage.setItem('hil-theme', theme); } catch (_) {}
+  db.collection(SETTINGS).doc('prefs').set({ theme }, { merge: true }).catch(() => {});
 }
 
 function initTheme() {
-  const sel = $('theme-select');
-  THEMES.forEach(t => {
-    const o = document.createElement('option');
-    o.value = t.id; o.textContent = t.label;
-    sel.appendChild(o);
-  });
-  sel.addEventListener('change', () => applyTheme(sel.value));
+  $('theme-toggle').addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
   applyTheme(currentTheme(), { persist: false });
   // Follow the theme saved in Firestore so it matches across devices.
   db.collection(SETTINGS).doc('prefs').onSnapshot((doc) => {
-    const saved = doc.exists && doc.data().theme;
+    const saved = doc.exists && doc.data().theme === 'dark' ? 'dark' : (doc.exists && doc.data().theme ? 'light' : null);
     if (saved && saved !== currentTheme()) applyTheme(saved, { persist: false });
     if (saved) { try { localStorage.setItem('hil-theme', saved); } catch (_) {} }
   }, () => {});
@@ -207,6 +202,7 @@ function wireEvents() {
   });
 
   $('open-summary').addEventListener('click', openSummary);
+  $('regular-day').addEventListener('click', logRegularDay);
   $('summary-back').addEventListener('click', () => showView('day'));
   $('pick-back').addEventListener('click', () => showView('day'));
 
@@ -325,31 +321,73 @@ function removeEntry(id) {
 
 // ---------- food library ----------
 function subscribeFoods() {
+  let migrated = false;
   db.collection(FOODS).onSnapshot(async (snap) => {
     foods = [];
     snap.forEach(d => foods.push({ id: d.id, ...d.data() }));
     foods.sort((a, b) => a.nameLower.localeCompare(b.nameLower));
-    if (snap.empty) await seedStarterFoods();
+    if (!migrated) { migrated = true; await migrateLibrary(); }
     if (views.pick.style.display !== 'none') renderPicker();
   }, (err) => showError('Could not load foods: ' + err.message));
 }
 
-async function seedStarterFoods() {
+// One-time library setup. v2: drop the old starter list, add the regular meals.
+async function migrateLibrary() {
   try {
-    const flag = await db.collection(SETTINGS).doc('seed').get();
-    if (flag.exists && flag.data().done) return;
+    const flagRef = db.collection(SETTINGS).doc('seed');
+    const flag = await flagRef.get();
+    const version = flag.exists ? (Number(flag.data().version) || (flag.data().done ? 1 : 0)) : 0;
+    if (version >= SEED_VERSION) return;
+
     const batch = db.batch();
-    STARTER_FAVOURITES.forEach(name => {
+    if (version < 2) {
+      const old = new Set(OLD_STARTER_FAVOURITES.map(n => n.toLowerCase()));
+      foods.filter(f => old.has(f.nameLower)).forEach(f => batch.delete(db.collection(FOODS).doc(f.id)));
+    }
+    REGULAR_FOODS.forEach(r => {
+      if (foods.some(f => f.nameLower === r.name.toLowerCase())) return;
       batch.set(db.collection(FOODS).doc(), {
-        name, nameLower: name.toLowerCase(), favourite: true, useCount: 0,
+        name: r.name, nameLower: r.name.toLowerCase(), favourite: true, tag: r.tag, useCount: 0,
         createdAt: new Date().toISOString()
       });
     });
-    batch.set(db.collection(SETTINGS).doc('seed'), { done: true, at: new Date().toISOString() });
+    batch.set(flagRef, { done: true, version: SEED_VERSION, at: new Date().toISOString() }, { merge: true });
     await batch.commit();
   } catch (err) {
-    showError('Could not set up starter foods: ' + err.message);
+    showError('Could not set up foods: ' + err.message);
   }
+}
+
+// Ensures a library food exists (by name) and returns it.
+async function ensureFood(name, tag) {
+  const lower = name.toLowerCase();
+  let f = foods.find(x => x.nameLower === lower);
+  if (f) return f;
+  const ref = db.collection(FOODS).doc();
+  f = { id: ref.id, name, nameLower: lower, favourite: true, tag, useCount: 0, createdAt: new Date().toISOString() };
+  foods.push(f);
+  await ref.set({ name: f.name, nameLower: f.nameLower, favourite: true, tag, useCount: 0, createdAt: f.createdAt });
+  return f;
+}
+
+// "Regular day": log Regular breakfast + Regular lunch for the selected date.
+async function logRegularDay() {
+  const now = new Date().toISOString();
+  const added = [];
+  const entries = [...dayEntries];
+  for (const r of REGULAR_FOODS) {
+    const f = await ensureFood(r.name, r.tag);
+    const already = entries.some(e => e.meal === r.meal && e.foodId === f.id);
+    if (already) continue;
+    entries.push({ id: uid(), meal: r.meal, name: f.name, foodId: f.id, tag: f.tag || r.tag, at: now });
+    added.push(f);
+  }
+  if (added.length === 0) { toast('Regular day already logged'); return; }
+  toast(added.length === 2 ? 'Regular day logged ✓' : `Added ${added[0].name} ✓`);
+  await saveDay(entries);
+  const batch = db.batch();
+  added.forEach(f => batch.update(db.collection(FOODS).doc(f.id), { useCount: firebase.firestore.FieldValue.increment(1), lastUsed: now }));
+  batch.commit().catch(() => {});
 }
 
 async function addNewFood(name) {

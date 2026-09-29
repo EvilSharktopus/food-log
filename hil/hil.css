@@ -2,7 +2,7 @@
 
 /* ---------- Themes ----------
    Each theme sets the same variables. Switch with data-theme on <html>. */
-:root, :root[data-theme="warm"] {
+:root, :root[data-theme="light"] {
   color-scheme: light;
   --bg: #fdf6ec;
   --card: #ffffff;
@@ -35,54 +35,6 @@
   --t-borderline: #eda100;
   --t-indulgent: #e34948;
   --t-none: #b8b0a6;
-}
-
-:root[data-theme="clean"] {
-  --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0;
-  --ink: #0f172a; --ink-2: #475569; --ink-3: #94a3b8;
-  --accent: #2563eb; --accent-ink: #1e40af; --accent-bg: #dbeafe; --accent-bg-2: #bfdbfe;
-  --disabled: #cbd5e1; --shadow: rgba(15,23,42,0.05); --shadow-strong: rgba(15,23,42,0.12);
-  --toast-bg: #0f172a; --toast-ink: #ffffff;
-  --tile-breakfast-bg: #e0f2fe; --tile-breakfast-ink: #075985;
-  --tile-lunch-bg: #dbeafe;     --tile-lunch-ink: #1e40af;
-  --tile-dinner-bg: #ede9fe;    --tile-dinner-ink: #5b21b6;
-  --tile-snack-bg: #f1f5f9;     --tile-snack-ink: #334155;
-}
-
-:root[data-theme="sage"] {
-  --bg: #f3f6ee; --card: #ffffff; --border: #dde5cf;
-  --ink: #1f2a17; --ink-2: #4f5f42; --ink-3: #8a9a7c;
-  --accent: #4d7c0f; --accent-ink: #365314; --accent-bg: #ecfccb; --accent-bg-2: #d9f99d;
-  --disabled: #cfd8c2; --shadow: rgba(31,42,23,0.06); --shadow-strong: rgba(31,42,23,0.12);
-  --toast-bg: #1f2a17; --toast-ink: #ffffff;
-  --tile-breakfast-bg: #fef9c3; --tile-breakfast-ink: #713f12;
-  --tile-lunch-bg: #ecfccb;     --tile-lunch-ink: #3f6212;
-  --tile-dinner-bg: #d1fae5;    --tile-dinner-ink: #065f46;
-  --tile-snack-bg: #ffedd5;     --tile-snack-ink: #9a3412;
-}
-
-:root[data-theme="rose"] {
-  --bg: #fdf2f6; --card: #ffffff; --border: #f5d5e2;
-  --ink: #3b1526; --ink-2: #7a4a5e; --ink-3: #b28a9b;
-  --accent: #db2777; --accent-ink: #9d174d; --accent-bg: #fce7f3; --accent-bg-2: #fbcfe8;
-  --disabled: #e9c9d6; --shadow: rgba(59,21,38,0.06); --shadow-strong: rgba(59,21,38,0.12);
-  --toast-bg: #3b1526; --toast-ink: #ffffff;
-  --tile-breakfast-bg: #ffe4e6; --tile-breakfast-ink: #9f1239;
-  --tile-lunch-bg: #fce7f3;     --tile-lunch-ink: #9d174d;
-  --tile-dinner-bg: #f3e8ff;    --tile-dinner-ink: #6b21a8;
-  --tile-snack-bg: #fff1f2;     --tile-snack-ink: #be123c;
-}
-
-:root[data-theme="ocean"] {
-  --bg: #eef6f8; --card: #ffffff; --border: #cfe3e8;
-  --ink: #0f2a33; --ink-2: #3f5f6a; --ink-3: #7f9ba5;
-  --accent: #0e7490; --accent-ink: #155e75; --accent-bg: #cffafe; --accent-bg-2: #a5f3fc;
-  --disabled: #bcd3da; --shadow: rgba(15,42,51,0.06); --shadow-strong: rgba(15,42,51,0.12);
-  --toast-bg: #0f2a33; --toast-ink: #ffffff;
-  --tile-breakfast-bg: #cffafe; --tile-breakfast-ink: #155e75;
-  --tile-lunch-bg: #dbeafe;     --tile-lunch-ink: #1e3a8a;
-  --tile-dinner-bg: #ccfbf1;    --tile-dinner-ink: #115e59;
-  --tile-snack-bg: #e0f2fe;     --tile-snack-ink: #0c4a6e;
 }
 
 :root[data-theme="dark"] {
@@ -385,18 +337,22 @@ input { touch-action: manipulation; }
 
 .summary-empty { text-align: center; color: var(--ink-3); font-size: 0.9rem; padding: 14px 0; }
 
-/* ---------- Theme dropdown ---------- */
-.theme-line { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 0 4px; }
-.theme-select-label { font-size: 0.8rem; font-weight: 700; color: var(--ink-3); }
-.theme-select {
-  font-family: inherit; font-size: 0.9rem; font-weight: 700; color: var(--ink-2);
-  background: var(--card); border: 1px solid var(--border); border-radius: 999px;
-  padding: 6px 28px 6px 12px; cursor: pointer;
-  -webkit-appearance: none; appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
-  background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%;
-  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+/* ---------- Light / dark toggle ---------- */
+.theme-line { display: flex; justify-content: flex-end; padding: 0 4px; }
+.theme-toggle {
+  border: 1px solid var(--border); background: var(--card); color: var(--ink-2);
+  border-radius: 999px; padding: 8px 14px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
 }
+
+/* ---------- Regular day ---------- */
+.regular-day {
+  border: none; background: var(--accent); color: #fff;
+  border-radius: var(--radius); padding: 18px;
+  font-size: 1.15rem; font-weight: 800; cursor: pointer;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+.regular-day:active { transform: scale(0.98); }
+.regular-day-note { text-align: center; font-size: 0.78rem; color: var(--ink-3); font-weight: 600; margin-top: -8px; }
 
 /* ---------- Tag sheet ---------- */
 .sheet-backdrop {
