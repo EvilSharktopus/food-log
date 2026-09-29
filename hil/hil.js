@@ -36,6 +36,15 @@ const THEMES = [
 ];
 const MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'];
 
+// Food tags. Stored on the food (asked once, first time it's logged), never
+// shown on the picker chips; used only in the summary.
+const TAGS = {
+  safe:       { label: 'Safe',       color: 'var(--t-safe)' },
+  borderline: { label: 'Borderline', color: 'var(--t-borderline)' },
+  indulgent:  { label: 'Indulgent',  color: 'var(--t-indulgent)' }
+};
+const TAG_ORDER = ['safe', 'borderline', 'indulgent'];
+
 // Starter favourites, seeded once into hil_foods so they can be edited later.
 const STARTER_FAVOURITES = [
   'Toast', 'Eggs', 'Oatmeal', 'Cereal', 'Yogurt', 'Banana', 'Apple',
@@ -125,27 +134,21 @@ function applyTheme(id, { persist = true } = {}) {
   document.documentElement.setAttribute('data-theme', theme.id);
   const meta = $('theme-color-meta');
   if (meta) meta.setAttribute('content', theme.chrome);
-  document.querySelectorAll('.theme-swatch').forEach(b => {
-    b.classList.toggle('active', b.dataset.theme === theme.id);
-    b.setAttribute('aria-checked', b.dataset.theme === theme.id ? 'true' : 'false');
-  });
+  const sel = $('theme-select');
+  if (sel && sel.value !== theme.id) sel.value = theme.id;
   if (!persist) return;
   try { localStorage.setItem('hil-theme', theme.id); } catch (_) {}
   db.collection(SETTINGS).doc('prefs').set({ theme: theme.id }, { merge: true }).catch(() => {});
 }
 
 function initTheme() {
-  const row = $('theme-row');
+  const sel = $('theme-select');
   THEMES.forEach(t => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'theme-swatch';
-    b.dataset.theme = t.id;
-    b.setAttribute('role', 'radio');
-    b.innerHTML = `<span class="theme-dot" style="background:${t.swatch}; border-color:${t.chrome}"></span><span class="theme-name">${t.label}</span>`;
-    b.addEventListener('click', () => applyTheme(t.id));
-    row.appendChild(b);
+    const o = document.createElement('option');
+    o.value = t.id; o.textContent = t.label;
+    sel.appendChild(o);
   });
+  sel.addEventListener('change', () => applyTheme(sel.value));
   applyTheme(currentTheme(), { persist: false });
   // Follow the theme saved in Firestore so it matches across devices.
   db.collection(SETTINGS).doc('prefs').onSnapshot((doc) => {
@@ -153,6 +156,37 @@ function initTheme() {
     if (saved && saved !== currentTheme()) applyTheme(saved, { persist: false });
     if (saved) { try { localStorage.setItem('hil-theme', saved); } catch (_) {} }
   }, () => {});
+}
+
+// ---------- tag sheet ----------
+let tagResolve = null;
+
+// Shows the sheet for one food; resolves with the chosen tag or null on skip.
+function askTag(food, { kicker = 'How would you tag' } = {}) {
+  return new Promise((resolve) => {
+    tagResolve = resolve;
+    $('tag-sheet-kicker').textContent = kicker;
+    $('tag-sheet-title').textContent = food.name;
+    document.querySelectorAll('.tag-btn').forEach(b => b.classList.toggle('current', b.dataset.tag === food.tag));
+    $('tag-sheet').style.display = '';
+  });
+}
+
+function closeTagSheet(value) {
+  $('tag-sheet').style.display = 'none';
+  const r = tagResolve; tagResolve = null;
+  if (r) r(value);
+}
+
+async function setFoodTag(food, tag) {
+  food.tag = tag;
+  try { await db.collection(FOODS).doc(food.id).update({ tag }); }
+  catch (err) { showError('Could not save tag: ' + err.message); }
+}
+
+function foodTagFor(entry) {
+  const f = foods.find(x => x.id === entry.foodId);
+  return (f && f.tag) || entry.tag || null;
 }
 
 function wireEvents() {
@@ -188,6 +222,12 @@ function wireEvents() {
   });
   $('add-new-btn').addEventListener('click', () => addNewFood($('food-search').value.trim()));
   $('log-selected').addEventListener('click', logSelected);
+
+  document.querySelectorAll('.tag-btn').forEach(btn => {
+    btn.addEventListener('click', () => closeTagSheet(btn.dataset.tag));
+  });
+  $('tag-skip').addEventListener('click', () => closeTagSheet(null));
+  $('tag-sheet').addEventListener('click', (e) => { if (e.target === $('tag-sheet')) closeTagSheet(null); });
 
   document.querySelectorAll('.range-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -255,7 +295,13 @@ function renderDay() {
           <span class="log-item-time">${timeLabel(e.at)}</span>
           <button class="log-item-del" aria-label="Remove">×</button>`;
         row.querySelector('.log-item-name').textContent = e.name;
-        row.querySelector('.log-item-del').addEventListener('click', () => removeEntry(e.id));
+        row.querySelector('.log-item-del').addEventListener('click', (ev) => { ev.stopPropagation(); removeEntry(e.id); });
+        row.addEventListener('click', async () => {
+          const food = foods.find(f => f.id === e.foodId);
+          if (!food) return;
+          const tag = await askTag(food, { kicker: food.tag ? 'Change tag for' : 'How would you tag' });
+          if (tag && tag !== food.tag) { await setFoodTag(food, tag); toast(`${food.name}: ${TAGS[tag].label}`); }
+        });
         card.appendChild(row);
       });
     log.appendChild(card);
@@ -392,9 +438,17 @@ function renderPicker() {
 
 async function logSelected() {
   if (pickSelected.size === 0) return;
-  const now = new Date().toISOString();
   const chosen = [...pickSelected].map(id => foods.find(f => f.id === id)).filter(Boolean);
-  const newEntries = chosen.map(f => ({ id: uid(), meal: pickMeal, name: f.name, foodId: f.id, at: now }));
+
+  // First time a food is logged, ask for its tag (once; skipping leaves it untagged).
+  for (const f of chosen) {
+    if (f.tag) continue;
+    const tag = await askTag(f);
+    if (tag) await setFoodTag(f, tag);
+  }
+
+  const now = new Date().toISOString();
+  const newEntries = chosen.map(f => ({ id: uid(), meal: pickMeal, name: f.name, foodId: f.id, tag: f.tag || null, at: now }));
 
   showView('day');
   toast(`Logged ${chosen.length} to ${MEALS[pickMeal].label} ✓`);
@@ -447,6 +501,12 @@ function renderSummary() {
   MEAL_ORDER.forEach(m => byMeal[m] = 0);
   entries.forEach(e => { if (byMeal[e.meal] !== undefined) byMeal[e.meal]++; });
   renderDonut(byMeal, entries.length);
+
+  // tags
+  const byTag = { safe: 0, borderline: 0, indulgent: 0, none: 0 };
+  entries.forEach(e => { const t = foodTagFor(e); byTag[t && byTag[t] !== undefined ? t : 'none']++; });
+  renderTagDonut(byTag, entries.length);
+  renderTagByMeal(entries);
 
   // top foods
   const counts = {};
@@ -535,6 +595,86 @@ function renderDonut(byMeal, total) {
       <span class="legend-name">${MEALS[m].label}</span>
       <span class="legend-val">${byMeal[m]} · ${pct}%</span>`;
     legend.appendChild(row);
+  });
+}
+
+function renderTagDonut(byTag, total) {
+  const svg = $('tag-donut');
+  const legend = $('tag-legend');
+  svg.innerHTML = ''; legend.innerHTML = '';
+  const cx = 100, cy = 100, r = 78, stroke = 30;
+  const circ = 2 * Math.PI * r;
+  const gap = 2 / circ * 360;
+  const keys = [...TAG_ORDER, 'none'];
+  const meta = (k) => k === 'none' ? { label: 'Untagged', color: 'var(--t-none)' } : TAGS[k];
+
+  if (total === 0) {
+    svg.innerHTML = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${stroke}"/>
+      <text x="${cx}" y="${cy + 4}" text-anchor="middle" class="donut-center-sub">no data</text>`;
+    return;
+  }
+  const segs = keys.filter(k => byTag[k] > 0);
+  let angle = -90;
+  segs.forEach(k => {
+    const sweep = byTag[k] / total * 360;
+    const g = segs.length > 1 ? Math.min(gap, sweep / 3) : 0;
+    svg.appendChild(arcPath(cx, cy, r, angle + g / 2, angle + sweep - g / 2, stroke, meta(k).color, `${meta(k).label}: ${byTag[k]}`));
+    angle += sweep;
+  });
+  const tagged = total - byTag.none;
+  const safePct = tagged ? Math.round(byTag.safe / tagged * 100) : 0;
+  const centre = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  centre.setAttribute('x', cx); centre.setAttribute('y', cy + 2);
+  centre.setAttribute('text-anchor', 'middle'); centre.setAttribute('class', 'donut-center');
+  centre.textContent = `${safePct}%`;
+  svg.appendChild(centre);
+  const sub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  sub.setAttribute('x', cx); sub.setAttribute('y', cy + 20);
+  sub.setAttribute('text-anchor', 'middle'); sub.setAttribute('class', 'donut-center-sub');
+  sub.textContent = 'safe';
+  svg.appendChild(sub);
+
+  keys.forEach(k => {
+    if (k === 'none' && byTag.none === 0) return;
+    const pct = Math.round(byTag[k] / total * 100);
+    const row = document.createElement('div');
+    row.className = 'legend-row';
+    row.innerHTML = `<span class="legend-swatch" style="background:${meta(k).color}"></span>
+      <span class="legend-name">${meta(k).label}</span>
+      <span class="legend-val">${byTag[k]} · ${pct}%</span>`;
+    legend.appendChild(row);
+  });
+}
+
+function renderTagByMeal(entries) {
+  const wrap = $('tag-by-meal');
+  wrap.innerHTML = '';
+  MEAL_ORDER.forEach(m => {
+    const items = entries.filter(e => e.meal === m);
+    const c = { safe: 0, borderline: 0, indulgent: 0 };
+    items.forEach(e => { const t = foodTagFor(e); if (c[t] !== undefined) c[t]++; });
+    const tagged = c.safe + c.borderline + c.indulgent;
+    const tile = document.createElement('div');
+    tile.className = 'tbm-tile';
+    tile.innerHTML = `<div class="tbm-label">${MEALS[m].label}</div>`;
+    if (tagged === 0) {
+      tile.innerHTML += `<div class="tbm-bar"></div><div class="tbm-empty">no tagged foods</div>`;
+    } else {
+      const bar = document.createElement('div');
+      bar.className = 'tbm-bar';
+      bar.title = TAG_ORDER.map(t => `${TAGS[t].label} ${c[t]}`).join(' · ');
+      TAG_ORDER.forEach(t => {
+        if (!c[t]) return;
+        const seg = document.createElement('div');
+        seg.className = 'tbm-seg';
+        seg.style.width = (c[t] / tagged * 100) + '%';
+        seg.style.background = TAGS[t].color;
+        bar.appendChild(seg);
+      });
+      tile.appendChild(bar);
+      tile.innerHTML += `<div class="tbm-empty">${Math.round(c.safe / tagged * 100)}% safe</div>`;
+    }
+    wrap.appendChild(tile);
   });
 }
 

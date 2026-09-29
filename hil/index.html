@@ -62,9 +62,9 @@
 
       <button id="open-summary" class="summary-link">See my summary</button>
 
-      <div class="theme-card">
-        <div class="theme-title">Theme</div>
-        <div id="theme-row" class="theme-row" role="radiogroup" aria-label="Colour theme"></div>
+      <div class="theme-line">
+        <label for="theme-select" class="theme-select-label">Theme</label>
+        <select id="theme-select" class="theme-select" aria-label="Colour theme"></select>
       </div>
     </section>
 
@@ -133,6 +133,15 @@
       </div>
 
       <div class="chart-card">
+        <div class="chart-title">Foods by tag</div>
+        <div class="donut-wrap">
+          <svg id="tag-donut" class="donut" viewBox="0 0 200 200" role="img" aria-label="Foods by tag"></svg>
+          <div id="tag-legend" class="legend"></div>
+        </div>
+        <div id="tag-by-meal" class="tag-by-meal"></div>
+      </div>
+
+      <div class="chart-card">
         <div class="chart-title">Most logged foods</div>
         <div id="top-foods" class="bars"></div>
       </div>
@@ -150,6 +159,20 @@
     </section>
 
   </main>
+
+  <!-- Tag sheet: asks once per food, or on tap of a logged item -->
+  <div id="tag-sheet" class="sheet-backdrop" style="display:none;">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="tag-sheet-title">
+      <div id="tag-sheet-kicker" class="sheet-kicker">How would you tag</div>
+      <div id="tag-sheet-title" class="sheet-title">Food</div>
+      <div class="tag-options">
+        <button class="tag-btn tag-safe" data-tag="safe">Safe</button>
+        <button class="tag-btn tag-borderline" data-tag="borderline">Borderline</button>
+        <button class="tag-btn tag-indulgent" data-tag="indulgent">Indulgent</button>
+      </div>
+      <button id="tag-skip" class="sheet-skip">Skip for now</button>
+    </div>
+  </div>
 
   <div id="toast" class="toast" style="display:none;"></div>
 

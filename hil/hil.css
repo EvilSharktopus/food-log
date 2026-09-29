@@ -29,6 +29,12 @@
   --s-lunch: #eb6834;
   --s-dinner: #1baf7a;
   --s-snack: #eda100;
+
+  /* tag colours (safe / borderline / indulgent), validated as a set */
+  --t-safe: #008300;
+  --t-borderline: #eda100;
+  --t-indulgent: #e34948;
+  --t-none: #b8b0a6;
 }
 
 :root[data-theme="clean"] {
@@ -95,6 +101,10 @@
   --s-lunch: #d95926;
   --s-dinner: #199e70;
   --s-snack: #c98500;
+  --t-safe: #008300;
+  --t-borderline: #c98500;
+  --t-indulgent: #e34948;
+  --t-none: #6a6055;
 }
 
 :root {
@@ -375,25 +385,55 @@ input { touch-action: manipulation; }
 
 .summary-empty { text-align: center; color: var(--ink-3); font-size: 0.9rem; padding: 14px 0; }
 
-/* ---------- Theme picker ---------- */
-.theme-card {
+/* ---------- Theme dropdown ---------- */
+.theme-line { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 0 4px; }
+.theme-select-label { font-size: 0.8rem; font-weight: 700; color: var(--ink-3); }
+.theme-select {
+  font-family: inherit; font-size: 0.9rem; font-weight: 700; color: var(--ink-2);
+  background: var(--card); border: 1px solid var(--border); border-radius: 999px;
+  padding: 6px 28px 6px 12px; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+
+/* ---------- Tag sheet ---------- */
+.sheet-backdrop {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(0,0,0,0.45);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0 10px calc(10px + env(safe-area-inset-bottom));
+}
+.sheet {
+  width: 100%; max-width: 500px;
   background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 12px 14px;
+  border-radius: var(--radius); padding: 18px 16px 12px;
+  box-shadow: 0 -8px 30px var(--shadow-strong);
 }
-.theme-title {
-  font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px;
-  color: var(--ink-2); margin-bottom: 8px;
+.sheet-kicker { font-size: 0.8rem; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.5px; }
+.sheet-title { font-size: 1.4rem; font-weight: 800; margin: 2px 0 14px; }
+.tag-options { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.tag-btn {
+  border: 2px solid var(--border); background: var(--bg); border-radius: var(--radius-sm);
+  padding: 18px 6px; font-size: 1rem; font-weight: 800; cursor: pointer;
 }
-.theme-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.theme-swatch {
-  border: 2px solid transparent; background: transparent; border-radius: var(--radius-sm);
-  padding: 6px 2px; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  cursor: pointer;
+.tag-btn.current { border-color: var(--ink); }
+.tag-safe { color: var(--t-safe); }
+.tag-borderline { color: var(--t-borderline); }
+.tag-indulgent { color: var(--t-indulgent); }
+.sheet-skip {
+  width: 100%; margin-top: 10px; border: none; background: transparent;
+  color: var(--ink-3); font-size: 0.9rem; font-weight: 600; padding: 10px; cursor: pointer;
 }
-.theme-swatch.active { border-color: var(--accent); background: var(--accent-bg); }
-.theme-dot { width: 28px; height: 28px; border-radius: 50%; border: 4px solid; box-shadow: 0 0 0 1px var(--border); }
-.theme-name { font-size: 0.7rem; font-weight: 700; color: var(--ink-2); }
-.theme-swatch.active .theme-name { color: var(--accent-ink); }
+.log-item { cursor: pointer; }
+
+.tag-by-meal { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
+.tbm-tile { text-align: center; }
+.tbm-label { font-size: 0.7rem; font-weight: 700; color: var(--ink-2); margin-bottom: 4px; }
+.tbm-bar { display: flex; height: 10px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--bg); }
+.tbm-seg { height: 100%; }
+.tbm-empty { font-size: 0.65rem; color: var(--ink-3); }
 
 /* Dark-mode relief for the low-contrast chart hues: keep labels visible */
 .legend-val, .bar-val, .stat-val { color: var(--ink); }
