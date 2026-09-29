@@ -6,23 +6,23 @@
   color-scheme: light;
   --bg: #fdf6ec;
   --card: #ffffff;
-  --border: #f0e4d2;
+  --border: #e3d3bc;
   --ink: #2b2118;
   --ink-2: #6b5a4b;
   --ink-3: #a3917f;
   --accent: #f97316;
   --accent-ink: #9a3412;
-  --accent-bg: #ffedd5;
-  --accent-bg-2: #fed7aa;
+  --accent-bg: #fed7aa;
+  --accent-bg-2: #fdba74;
   --disabled: #e7d9c6;
   --shadow: rgba(43,33,24,0.06);
   --shadow-strong: rgba(43,33,24,0.12);
   --toast-bg: #2b2118; --toast-ink: #ffffff;
 
-  --tile-breakfast-bg: #fef3c7; --tile-breakfast-ink: #92400e;
-  --tile-lunch-bg: #dcfce7;     --tile-lunch-ink: #166534;
-  --tile-dinner-bg: #e0e7ff;    --tile-dinner-ink: #3730a3;
-  --tile-snack-bg: #fce7f3;     --tile-snack-ink: #9d174d;
+  --tile-breakfast-bg: #fde68a; --tile-breakfast-ink: #78350f;
+  --tile-lunch-bg: #bbf7d0;     --tile-lunch-ink: #14532d;
+  --tile-dinner-bg: #c7d2fe;    --tile-dinner-ink: #312e81;
+  --tile-snack-bg: #fbcfe8;     --tile-snack-ink: #831843;
 
   /* chart series (validated: adjacent pairs pass CVD + normal-vision floors) */
   --s-breakfast: #2a78d6;
@@ -212,6 +212,7 @@ input { touch-action: manipulation; }
 
 .summary-link {
   border: 1px solid var(--border); background: var(--card);
+  box-shadow: 0 2px 6px var(--shadow);
   border-radius: var(--radius); padding: 16px;
   font-size: 1.05rem; font-weight: 800; cursor: pointer; color: var(--ink);
 }
